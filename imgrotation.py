@@ -12,6 +12,7 @@
 # History                                                                                          #
 #--------------------------------------------------------------------------------------------------#
 # copied 2025.11.23: restructed from the satmetrix project                                         #
+# modify 2026.01.25: re-write rotate_image function without using openCV                           #
 #--------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------#
@@ -20,7 +21,7 @@
 import numpy as np
 import gaussian as gs
 import logging
-import cv2
+# import cv2
 
 #--------------------------------------------------------------------------------------------------#
 # Main                                                                                             #
@@ -191,8 +192,8 @@ def rotate_image(image, angle, coordinates):
 
     Notes
     -----
-        Restructed from the satmetrix project by Kiyoaki Okudaira - University of Washington / IAU CPS SatHub
-        (c) 2025 Kilando Chambers
+        Restructed from the satmetrix project and modified by Kiyoaki Okudaira - University of Washington / IAU CPS SatHub
+        (c) 2026 Kilando Chambers and Kiyoaki Okudaira
     """
     # finding midpoint of line to find point of rotation
     # because pixels have to be integers, this midpoint will be an estimate
@@ -201,8 +202,64 @@ def rotate_image(image, angle, coordinates):
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
 
-    matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
-    rotated_image = cv2.warpAffine(image.astype(float), matrix, (image.shape[1], image.shape[0]))
+    # rotate with OpenCV (legacy)
+    # matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
+    # rotated_image = cv2.warpAffine(image.astype(float), matrix, (image.shape[1], image.shape[0]))
+
+    # rotate without OpenCV
+    # rotation center (midpoint of the streak)
+    rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
+    rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
+
+    # rotation matrix
+    theta = np.deg2rad(angle)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+
+    # inverse mapping
+    h, w = image.shape[:2]
+    yy, xx = np.indices((h, w), dtype=float)
+
+    x0 = xx - rotation_x
+    y0 = yy - rotation_y
+
+    x_src = cos_t * x0 + sin_t * y0 + rotation_x
+    y_src = -sin_t * x0 + cos_t * y0 + rotation_y
+
+    # bilinear interpolation
+    x0f = np.floor(x_src).astype(int)
+    y0f = np.floor(y_src).astype(int)
+    x1f = x0f + 1
+    y1f = y0f + 1
+
+    # weights
+    wx = x_src - x0f
+    wy = y_src - y0f
+
+    def _clip(a, lo, hi):
+        return np.clip(a, lo, hi)
+
+    # mask for valid source pixels
+    valid = (x0f >= 0) & (x1f < w) & (y0f >= 0) & (y1f < h)
+
+    x0c = _clip(x0f, 0, w - 1)
+    x1c = _clip(x1f, 0, w - 1)
+    y0c = _clip(y0f, 0, h - 1)
+    y1c = _clip(y1f, 0, h - 1)
+
+    Ia = image[y0c, x0c].astype(float)
+    Ib = image[y0c, x1c].astype(float)
+    Ic = image[y1c, x0c].astype(float)
+    Id = image[y1c, x1c].astype(float)
+
+    rotated_image = (
+        (1 - wx) * (1 - wy) * Ia +
+        wx * (1 - wy) * Ib +
+        (1 - wx) * wy * Ic +
+        wx * wy * Id
+    )
+
+    # fill outside region with 0
+    rotated_image[~valid] = 0.0
 
     # cropping image
     distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
