@@ -14,7 +14,7 @@ from ._version import __version__
 
 # from satphotometry import gettle
 # from satphotometry import satorbit
-# from satphotometry import fitsparser
-# from satphotometry import imgrotation
-# from satphotometry import LEOphotometry
-# from satphotometry import noirlab
+from satphotometry import fitsparser
+from satphotometry import imgrotation
+from satphotometry import LEOphotometry
+from satphotometry import noirlab
