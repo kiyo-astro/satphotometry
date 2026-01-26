@@ -13,6 +13,7 @@
 #--------------------------------------------------------------------------------------------------#
 # copied 2025.11.23: restructed from the satmetrix project                                         #
 # modify 2026.01.25: re-write rotate_image function without using openCV                           #
+# bugfix 2026.01.25: rotate_image function direction of rotation                                   #
 #--------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------#
@@ -212,7 +213,7 @@ def rotate_image(image, angle, coordinates):
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
 
     # rotation matrix
-    theta = np.deg2rad(angle)
+    theta = -np.deg2rad(angle)
     cos_t, sin_t = np.cos(theta), np.sin(theta)
 
     # inverse mapping
