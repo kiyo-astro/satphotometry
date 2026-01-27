@@ -9,6 +9,7 @@
 # History                                                                                          #
 #--------------------------------------------------------------------------------------------------#
 # copied 2025.12.07: from astroKUBO_lib                                                            #
+# update 2026.01.27: get_past_TLE function added                                                   #
 #--------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------#
@@ -77,9 +78,10 @@ class space_track:
 
         return response.status_code,tle_result
     
-    def get_past_TLEs(
+    def get_past_TLE(
             date: str,
             range: int,
+            norad_id: int | str,
             user_id: str,
             password: str
             ):
@@ -88,8 +90,80 @@ class space_track:
 
         Parameters
         ----------
+        date: `str`
+            date to search TLE [YYYY-MM-DD]
+        range: `int`
+            TLE search range [day]
         norad_id: `int` or `str`
             NORAD catalog number
+        user_id: `str`
+            space-track.org user id
+        password: `str`
+            space-track.org password
+
+        Returns
+        -------
+        response.status_code: `int`
+            status code of query
+        tle_result: `str`
+            Two-Line Element set
+
+        Notes
+        -----
+            (c) 2025 Kiyoaki Okudaira - Kyushu University Hanada Lab (SSDL) / IAU CPS SatHub
+        """
+        center_date = datetime.strptime(date, "%Y-%m-%d").date()
+        start_date = center_date - timedelta(days=range)
+        end_date   = center_date
+
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str   = end_date.strftime("%Y-%m-%d")
+
+        # Start Session
+        session = requests.Session()
+
+        # Log in
+        login_url = 'https://www.space-track.org/ajaxauth/login'
+        login_payload = {
+            'identity': user_id,
+            'password': password
+        }
+
+        response = session.post(login_url, data=login_payload)
+        if response.status_code != 200:
+            tle_result = None
+        else:
+            query_url = (
+                "https://www.space-track.org"
+                "/basicspacedata/query/"
+                "class/gp_history/"
+                f"NORAD_CAT_ID/{norad_id}/"
+                f"EPOCH/{start_str}--{end_str}/"
+                "orderby/EPOCH/"
+                "format/3le"
+            )
+
+            response = session.get(query_url, stream=True)
+            tle_result_list = response.text.splitlines()[-3:]
+            tle_result = tle_result_list[0] + "\r\n" + tle_result_list[1] + "\r\n" + tle_result_list[2]
+
+        return response.status_code,tle_result
+    
+    def get_past_TLEs(
+            date: str,
+            range: int,
+            user_id: str,
+            password: str
+            ):
+        """
+        Get past Two-Line Element set of all objects from space-track.org
+
+        Parameters
+        ----------
+        date: `str`
+            date to search TLE [YYYY-MM-DD]
+        range: `int`
+            TLE search range [day]
         user_id: `str`
             space-track.org user id
         password: `str`
