@@ -10,6 +10,7 @@
 #--------------------------------------------------------------------------------------------------#
 # coding 2026.01.22: 1st coding                                                                    #
 # update 2026.01.26: support tqdm with solve-field                                                 #
+# bugfix 2026.01.27: avoid unexpected error when over-writing output file existed                  #
 #--------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------#
@@ -60,7 +61,7 @@ def platesolve(
             cmd = cmd + " " + f + " " + str(solve_option[f]).replace(' ',r'\ ')
     
     result_path = solve_option["-N"]
-    remove(result_path)
+    remove(result_path) if path.exists(result_path) else None
 
     if async_process:
         if jupyter_env:
