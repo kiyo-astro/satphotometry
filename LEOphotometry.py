@@ -10,13 +10,14 @@
 # History                                                                                          #
 #--------------------------------------------------------------------------------------------------#
 # coding 2025.11.22: 1st coding                                                                    #
+# bugfix 2026.02.01: matplotlib import error fixed                                                 #
 #--------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------#
 # Libraries                                                                                        #
 #--------------------------------------------------------------------------------------------------#
 import numpy as np
-import matplotlib as plt
+from matplotlib import pyplot as plt
 from scipy.optimize import curve_fit
 import itertools
 from astropy.coordinates import SkyCoord
