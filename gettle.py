@@ -205,7 +205,7 @@ class space_track:
             query_url = (
                 "https://www.space-track.org"
                 "/basicspacedata/query/"
-                "class/tle/"
+                "class/gp_history/"
                 f"EPOCH/{start_str}--{end_str}/"
                 "orderby/NORAD_CAT_ID,EPOCH/"
                 "format/3le"
@@ -303,7 +303,7 @@ class parse:
                 i += 1
                 continue
 
-            satnum = str(int(line1[2:7].strip()))
+            satnum = str(line1[2:7].strip())
 
             # Epoch
             epoch_str = line1[18:32].strip()

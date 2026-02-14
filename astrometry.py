@@ -55,8 +55,10 @@ def platesolve(
     """
     cmd = "solve-field" + " " + filePATH.replace(' ',r'\ ')
     for f in solve_option:
-        if solve_option[f] is None:
+        if solve_option[f] == True:
             cmd = cmd + " " + f
+        elif solve_option[f] == False or solve_option[f] == None:
+            continue
         else:
             cmd = cmd + " " + f + " " + str(solve_option[f]).replace(' ',r'\ ')
     
