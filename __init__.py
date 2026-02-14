@@ -18,3 +18,4 @@ from satphotometry import fitsparser
 from satphotometry import imgrotation
 from satphotometry import LEOphotometry
 from satphotometry import noirlab
+from satphotometry import LEOphotometry
