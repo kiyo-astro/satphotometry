@@ -25,6 +25,7 @@ import numpy as np
 PASSSUMMARY_URL  = "https://www.heavens-above.com/PassSummary.aspx"
 PASSDETAIL_URL   = "https://www.heavens-above.com/passdetails.aspx"
 PASSSKYCHART_URL = "https://www.heavens-above.com/PassSkyChart2.ashx"
+SKYCHART_URL     = "https://www.heavens-above.com/wholeskychart.ashx"
 
 def get_pass_summary(
         norad_id: int | str,
@@ -226,6 +227,63 @@ def get_pass_chart(
         }
 
     r = requests.get(PASSSKYCHART_URL, params=query_params)
+    r.raise_for_status()
+    query_result = r.content
+
+    return query_result
+
+def get_wholeskychart(
+        obs_gd_lon_deg: float,
+        obs_gd_lat_deg: float,
+        obs_gd_height: float,
+        ha_mjd: float,
+        ha_timezone: str = "UCT",
+        ha_imgsize: int = 800
+        ):
+    """
+    Get satellite pass detail from heavens-above.com
+
+    Parameters
+    ----------
+    obs_gd_lon_deg: `float`
+        Geodetic longitude [deg]
+    obs_gd_lat_deg: `float`
+        Geodetic latitude [deg]
+    obs_gd_height: `float`
+        Geodetic height [km]
+    ha_mjd: `float`
+        MJD
+    ha_timezone: `str`
+        Pass Chart display timezone. Default is "UCT"
+    ha_timezone: `int`
+        Pass Chart image size [pix]. Default is 800
+
+    Returns
+    -------
+    query_result: `bytes`
+        Satellite pass chart image
+
+    Notes
+    -----
+        (c) 2026 Kiyoaki Okudaira - University of Washington / IAU CPS SatHub
+    """
+    "lat=0&lng=0&loc=Unspecified&alt=0&tz=UCT&size=800  SL=1&SN=1&BW=1&time=61085.28472&ecl=0&cb=0"
+    query_params = {
+        "lat"       : f"{obs_gd_lat_deg:.6f}",
+        "lng"       : f"{obs_gd_lon_deg:.6f}",
+        "loc"       : "Unspecified",
+        "alt"       : f"{obs_gd_height*1000:.0f}",
+        "tz"        : f"{ha_timezone}",
+        "size"      : f"{ha_imgsize:.0f}",
+        "SL"        : "1",
+        "SN"        : "1",
+        "BW"        : "1",
+        "time"      : f"{ha_mjd}",
+        "ecl"       : "0",
+        "cb"        : "0"
+        }
+
+    r = requests.get(SKYCHART_URL, params=query_params)
     r.raise_for_status()
     query_result = r.content
 
