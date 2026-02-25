@@ -83,7 +83,8 @@ class space_track:
             range: int,
             norad_id: int | str,
             user_id: str,
-            password: str
+            password: str,
+            nearest: bool = True
             ):
         """
         Get past Two-Line Element set from space-track.org
@@ -100,6 +101,8 @@ class space_track:
             space-track.org user id
         password: `str`
             space-track.org password
+        nearest: `bool`
+            return only nearest TLE. Default is True
 
         Returns
         -------
@@ -114,7 +117,10 @@ class space_track:
         """
         center_date = datetime.strptime(date, "%Y-%m-%d").date()
         start_date = center_date - timedelta(days=range)
-        end_date   = center_date
+        if nearest:
+            end_date   = center_date
+        else:
+            end_date   = center_date + timedelta(days=range)
 
         start_str = start_date.strftime("%Y-%m-%d")
         end_str   = end_date.strftime("%Y-%m-%d")
@@ -144,8 +150,11 @@ class space_track:
             )
 
             response = session.get(query_url, stream=True)
-            tle_result_list = response.text.splitlines()[-3:]
-            tle_result = tle_result_list[0] + "\r\n" + tle_result_list[1] + "\r\n" + tle_result_list[2]
+            if nearest:
+                tle_result_list = response.text.splitlines()[-3:]
+                tle_result = tle_result_list[0] + "\r\n" + tle_result_list[1] + "\r\n" + tle_result_list[2]
+            else:
+                tle_result = response.text
 
         return response.status_code,tle_result
     
