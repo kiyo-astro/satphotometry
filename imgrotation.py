@@ -22,7 +22,6 @@
 import numpy as np
 import gaussian as gs
 import logging
-# import cv2
 
 #--------------------------------------------------------------------------------------------------#
 # Main                                                                                             #
@@ -168,15 +167,21 @@ def norm_rsmd_test(image):
 
     return nr2, a, mu, width
 
-
-def rotate_image(image, angle, coordinates):
+def rotate_image(
+        image : np.ndarray, 
+        angle : float | int, 
+        coordinates : list, 
+        do_crop : bool = True , 
+        crop_half_height : int = 50, 
+        inv_matrix : bool = False
+        ):
     """
     Rotates an image containing a streak about that streak's midpoint and determined
     angle of rotation and crops that image for further analysis.
 
     Parameters
     -----------
-    image : `numpy.array`
+    image : `numpy.ndarray`
         Image containing the streaks of interest.
     angle : `float`
         Angle at which a particular streak is to be rotated such that the streak is parallel with
@@ -184,102 +189,161 @@ def rotate_image(image, angle, coordinates):
     coordinates : `list`
         A list of length two with the entrance and exit cartesian coordinates
         of the streak of interest.
+    do_crop : `bool`
+        Crop image and make output as satellite cutout. Default is True
+    crop_half_height : `int`
+        Crop height. Default is 50
+    inv_matrix : `bool`
+        Return inverse matrix and translation vector. Default is False
 
     Returns
     --------
-    rotated_image : `numpy.array`
+    rotated_image : `numpy.ndarray`
         Image containing the streak of interest rotated such that it is parallel with
         the x-axis and cropped to reduce noise.
+    r_matrix : (2,2) `numpy.ndarray`
+        Rotation matrix used in the mapping:
+            [x_src; y_src] = R * ([x; y] - A)
+        where [x; y] are coordinates in the *returned* rotated_image (after cropping if do_crop=True),
+        and [x_src; y_src] are coordinates in the original image.
+    r_pararell : (2,) `numpy.ndarray`
+        Translation vector in the mapping above.
 
     Notes
     -----
         Restructed from the satmetrix project and modified by Kiyoaki Okudaira - University of Washington / IAU CPS SatHub
         (c) 2026 Kilando Chambers and Kiyoaki Okudaira
     """
-    # finding midpoint of line to find point of rotation
-    # because pixels have to be integers, this midpoint will be an estimate
-
-    # rotating original image without crop
-    rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
-    rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
-
-    # rotate with OpenCV (legacy)
-    # matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
-    # rotated_image = cv2.warpAffine(image.astype(float), matrix, (image.shape[1], image.shape[0]))
-
-    # rotate without OpenCV
     # rotation center (midpoint of the streak)
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
 
-    # rotation matrix
+    # rotation angle
     theta = -np.deg2rad(angle)
     cos_t, sin_t = np.cos(theta), np.sin(theta)
 
-    # inverse mapping
+    # original image size
     h, w = image.shape[:2]
-    yy, xx = np.indices((h, w), dtype=float)
 
-    x0 = xx - rotation_x
-    y0 = yy - rotation_y
+    # output canvas that fully contains the rotated image (no clipping)
+    corners = np.array([
+        [0,     0],
+        [w - 1, 0],
+        [w - 1, h - 1],
+        [0,     h - 1],
+    ], dtype=float)
+
+    # make rotation matrix
+    cx = corners[:, 0] - rotation_x
+    cy = corners[:, 1] - rotation_y
+
+    x_rot = cos_t * cx + sin_t * cy + rotation_x
+    y_rot = -sin_t * cx + cos_t * cy + rotation_y
+
+    min_x, max_x = x_rot.min(), x_rot.max()
+    min_y, max_y = y_rot.min(), y_rot.max()
+
+    out_w = int(np.ceil(max_x - min_x + 1))
+    out_h = int(np.ceil(max_y - min_y + 1))
+
+    yy, xx = np.indices((out_h, out_w), dtype=float)
+
+    # map output coords to global rotated-space coords (x_out, y_out)
+    x_out = xx + min_x
+    y_out = yy + min_y
+
+    # inverse mapping (output -> original image)
+    x0 = x_out - rotation_x
+    y0 = y_out - rotation_y
+
+    r_matrix = np.array([
+        [cos_t,  sin_t],
+        [-sin_t, cos_t]
+    ], dtype=float)
 
     x_src = cos_t * x0 + sin_t * y0 + rotation_x
     y_src = -sin_t * x0 + cos_t * y0 + rotation_y
 
-    # bilinear interpolation
+    # bilinear interpolation (grayscale)
     x0f = np.floor(x_src).astype(int)
     y0f = np.floor(y_src).astype(int)
     x1f = x0f + 1
     y1f = y0f + 1
 
-    # weights
     wx = x_src - x0f
     wy = y_src - y0f
 
-    def _clip(a, lo, hi):
-        return np.clip(a, lo, hi)
-
-    # mask for valid source pixels
     valid = (x0f >= 0) & (x1f < w) & (y0f >= 0) & (y1f < h)
 
-    x0c = _clip(x0f, 0, w - 1)
-    x1c = _clip(x1f, 0, w - 1)
-    y0c = _clip(y0f, 0, h - 1)
-    y1c = _clip(y1f, 0, h - 1)
+    x0c = np.clip(x0f, 0, w - 1)
+    x1c = np.clip(x1f, 0, w - 1)
+    y0c = np.clip(y0f, 0, h - 1)
+    y1c = np.clip(y1f, 0, h - 1)
 
+    # If image has channels, you can extend this easily, but keep as original (2D) here.
     Ia = image[y0c, x0c].astype(float)
     Ib = image[y0c, x1c].astype(float)
     Ic = image[y1c, x0c].astype(float)
     Id = image[y1c, x1c].astype(float)
 
-    rotated_image = (
+    rotated_full = (
         (1 - wx) * (1 - wy) * Ia +
         wx * (1 - wy) * Ib +
         (1 - wx) * wy * Ic +
         wx * wy * Id
     )
+    rotated_full[~valid] = 0.0
 
-    # fill outside region with 0
-    rotated_image[~valid] = 0.0
+    # image cropping for streak cutout
+    if do_crop:
+        distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
+                           (coordinates[1][1] - coordinates[0][1])**2)
 
-    # cropping image
-    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
-                       (coordinates[1][1] - coordinates[0][1])**2)
+        rot_y_out = int(round(rotation_y - min_y))
 
-    # it's fine if end is bigger than the array, but if start
-    # goes negative we are indexing like array[bigger, lower]
-    # and get an empty array
-    start, end = int(rotation_y - 50), int(rotation_y + 50)
-    if start < 0:
-        start = 0
+        start, end = rot_y_out - crop_half_height, rot_y_out + crop_half_height
+        start = max(start, 0)
+        end = min(end, rotated_full.shape[0])
 
-    if distance < image.shape[1]:
-        rotated_image = rotated_image[start: end, 0: int(distance)]
+        valid_rows = valid[start:end]
+        valid_cols = np.all(valid_rows, axis=0)
+
+        if np.any(valid_cols):
+            x_min = np.argmax(valid_cols)
+            x_max = len(valid_cols) - np.argmax(valid_cols[::-1])
+        else:
+            x_min = 0
+            x_max = rotated_full.shape[1]
+
+        x_max = min(x_max, x_min + int(distance))
+
+        rotated_image = rotated_full[start:end, x_min:x_max]
+
+        # Final output pixel coord p=[x;y] corresponds to full-canvas pixel coord:
+        # (xx,yy) = (x + x_min, y + start)
+        # and global rotated-space coord (x_out,y_out) adds (min_x,min_y)
+        t = np.array([x_min + min_x, start + min_y], dtype=float)
+
     else:
-        rotated_image = rotated_image[start: end]
+        rotated_image = rotated_full
+        # No crop: p=[x;y] corresponds to full-canvas pixel coord (xx,yy)=(x,y)
+        t = np.array([min_x, min_y], dtype=float)
 
-    return rotated_image
+    # inverse mapping
+    c = np.array([rotation_x, rotation_y], dtype=float)
+    b = r_matrix @ (t - c) + c
 
+    R_inv = np.array([
+        [cos_t, -sin_t],
+        [sin_t,  cos_t]
+    ], dtype=float)  # inverse of R above
+
+    r_pararell = - (R_inv @ b)
+
+    if inv_matrix:
+        return rotated_image, r_matrix, r_pararell
+    else:
+        return rotated_image
 
 def transform_rho_theta(clustered_lines, image, cart_coord):
     """
