@@ -79,8 +79,9 @@ def img_mask(image_data,threshold=None):
     -----
         (c) 2025 Kiyoaki Okudaira - University of Washington / IAU CPS SatHub
     """
+    masked_data = image_data[image_data > 0]
     if threshold is None:
-        threshold = np.mean(image_data) + 3*np.std(image_data)
+        threshold = np.mean(masked_data) + 3*np.std(masked_data)
     masked_data = np.ma.array(image_data,mask=(threshold<image_data))
     return masked_data
 
